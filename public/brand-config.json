@@ -1,0 +1,33 @@
+{
+  "logo": "/logo.png",
+  "mascot": {
+    "name": "水豚",
+    "images": [
+      "/mascot/11.png",
+      "/mascot/20_美图抠图06-23-2025 (1).png",
+      "/mascot/21.png"
+    ]
+  },
+  "colors": {
+    "primary": "#8B5A2B",
+    "primaryLight": "#D4A574",
+    "primaryDark": "#5C3A1E",
+    "secondary": "#F5DEB3",
+    "accent": "#FFD700",
+    "honor": "#FAAD14",
+    "shame": "#F5222D",
+    "director": "#FFD700",
+    "background": "#FFF9F0",
+    "cardBg": "#FFFFFF",
+    "textPrimary": "#2C2C2C",
+    "textSecondary": "#666666",
+    "border": "#E8E8E8"
+  },
+  "gradients": {
+    "header": "linear-gradient(135deg, #8B5A2B 0%, #D4A574 100%)",
+    "card": "linear-gradient(135deg, #FFF9F0 0%, #FFFFFF 100%)",
+    "honor": "linear-gradient(135deg, #FFF7E6 0%, #FFFBE6 50%, #FFF9DB 100%)",
+    "shame": "linear-gradient(135deg, #FFF1F0 0%, #FFF2F0 50%, #FFF0F0 100%)",
+    "employeeAvatar": "linear-gradient(135deg, #8B5A2B 0%, #D4A574 100%)"
+  }
+}

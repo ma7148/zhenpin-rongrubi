@@ -1,0 +1,45 @@
+{
+  "name": "zhenpin-zudao-rongrubi",
+  "version": "1.0.0",
+  "description": "臻品足道荣辱榜 - 员工行为记录管理系统",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "node server/index.js",
+    "client": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cors": "^2.8.5",
+    "express": "^4.18.2",
+    "express-rate-limit": "^8.6.2",
+    "helmet": "^8.3.0",
+    "imap": "^0.8.19",
+    "jsonwebtoken": "^9.0.2",
+    "localtunnel": "^2.0.2",
+    "mailparser": "^3.9.16",
+    "mammoth": "^1.12.1",
+    "multer": "^2.2.0",
+    "nodemailer": "^9.0.5",
+    "sql.js": "^1.10.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@ant-design/icons": "^5.2.6",
+    "@vitejs/plugin-react": "^4.2.0",
+    "antd": "^5.12.0",
+    "axios": "^1.6.0",
+    "concurrently": "^8.2.2",
+    "dayjs": "^1.11.10",
+    "form-data": "^4.0.6",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-router-dom": "^6.20.0",
+    "vite": "^5.0.0"
+  },
+  "allowScripts": {
+    "esbuild@0.21.5": true
+  }
+}
