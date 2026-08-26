@@ -64,6 +64,25 @@ function saveDb() {
   fs.writeFileSync(DB_PATH, buffer);
 }
 
+// 记录操作日志
+function logOperation(req, action, resourceType, resourceId, details = {}) {
+  try {
+    const userId = req.user ? req.user.id : null;
+    const username = req.user ? req.user.username : 'anonymous';
+    const ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress || 'unknown';
+    const userAgent = req.headers['user-agent'] || 'unknown';
+    
+    dbRun(
+      'INSERT INTO operation_logs (user_id, username, action, resource_type, resource_id, details, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      [userId, username, action, resourceType, resourceId, JSON.stringify(details), ip, userAgent]
+    );
+    
+    console.log(`[日志] ${username} - ${action} ${resourceType} #${resourceId}`);
+  } catch (err) {
+    console.error('[日志] 记录失败:', err.message);
+  }
+}
+
 async function initDatabase() {
   const SQL = await initSqlJs();
 
@@ -169,6 +188,23 @@ async function initDatabase() {
       uploaded_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (employee_id) REFERENCES employees(id),
       FOREIGN KEY (uploaded_by) REFERENCES users(id)
+    )
+  `);
+
+  // 操作日志表（记录所有关键操作）
+  db.run(`
+    CREATE TABLE IF NOT EXISTS operation_logs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER,
+      username TEXT,
+      action TEXT NOT NULL,
+      resource_type TEXT, -- 'employee', 'record', 'user'等
+      resource_id INTEGER,
+      details TEXT, -- JSON格式的详细数据
+      ip_address TEXT,
+      user_agent TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id)
     )
   `);
 
@@ -513,6 +549,12 @@ app.post('/api/auth/login', authLimiter, (req, res) => {
     JWT_SECRET,
     { expiresIn: '7d' }
   );
+  
+  // 记录登录日志
+  logOperation(req, 'LOGIN', 'user', user.id, {
+    username: user.username,
+    role: user.role
+  });
 
   res.json({
     token,
@@ -836,6 +878,13 @@ app.post('/api/employees', authenticate, requireAdmin, (req, res) => {
   try {
     const result = dbRun('INSERT INTO employees (name, id_number, store_name, promotion_date) VALUES (?, ?, ?, ?)', [name, id_number, store_name, promotion_date]);
     saveDb();
+    
+    // 记录日志
+    logOperation(req, 'CREATE', 'employee', result.lastInsertRowid, {
+      name,
+      store_name
+    });
+    
     res.json({ id: result.lastInsertRowid, message: '添加成功' });
   } catch (err) {
     if (err.message && err.message.includes('UNIQUE')) {
@@ -851,6 +900,13 @@ app.put('/api/employees/:id', authenticate, requireAdmin, (req, res) => {
   try {
     dbRun('UPDATE employees SET name = ?, id_number = ?, store_name = ?, promotion_date = ? WHERE id = ?', [name, id_number, store_name, promotion_date, req.params.id]);
     saveDb();
+    
+    // 记录日志
+    logOperation(req, 'UPDATE', 'employee', req.params.id, {
+      name,
+      store_name
+    });
+    
     res.json({ message: '更新成功' });
   } catch (err) {
     if (err.message && err.message.includes('UNIQUE')) {
@@ -861,8 +917,14 @@ app.put('/api/employees/:id', authenticate, requireAdmin, (req, res) => {
 });
 
 app.delete('/api/employees/:id', authenticate, requireAdmin, (req, res) => {
-  dbRun('DELETE FROM employees WHERE id = ?', [req.params.id]);
+  const employeeId = req.params.id;
+  
+  dbRun('DELETE FROM employees WHERE id = ?', [employeeId]);
   saveDb();
+  
+  // 记录日志
+  logOperation(req, 'DELETE', 'employee', employeeId);
+  
   res.json({ message: '删除成功' });
 });
 
@@ -1016,6 +1078,15 @@ app.post('/api/records', authenticate, noViewer, (req, res) => {
     });
 
     saveDb();
+    
+    // 记录日志
+    logOperation(req, 'CREATE', 'record', recordId, {
+      employee_id,
+      month,
+      items_count: items.length,
+      watermark
+    });
+    
     res.json({ id: recordId, message: '提交成功', watermark });
   } catch (err) {
     res.status(500).json({ error: '提交失败' });
@@ -1035,14 +1106,27 @@ app.put('/api/records/:id/review', authenticate, requireAdmin, (req, res) => {
     [status, req.user.id, review_note || null, req.params.id]
   );
   saveDb();
+  
+  // 记录日志
+  logOperation(req, status === 'approved' ? 'APPROVE' : 'REJECT', 'record', req.params.id, {
+    status,
+    review_note
+  });
+  
   res.json({ message: status === 'approved' ? '已通过' : '已驳回' });
 });
 
 // 删除记录
 app.delete('/api/records/:id', authenticate, requireAdmin, (req, res) => {
-  dbRun('DELETE FROM record_items WHERE record_id = ?', [req.params.id]);
-  dbRun('DELETE FROM records WHERE id = ?', [req.params.id]);
+  const recordId = req.params.id;
+  
+  dbRun('DELETE FROM record_items WHERE record_id = ?', [recordId]);
+  dbRun('DELETE FROM records WHERE id = ?', [recordId]);
   saveDb();
+  
+  // 记录日志
+  logOperation(req, 'DELETE', 'record', recordId);
+  
   res.json({ message: '删除成功' });
 });
 
