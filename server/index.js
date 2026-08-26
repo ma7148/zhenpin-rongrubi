@@ -184,10 +184,19 @@ const app = express();
 
 // ============ 安全加固 ============
 
-// 1. 安全 HTTP headers（防止 XSS、点击劫持、嗅探等）
+// 1. 生产环境托管前端静态文件（必须在 CORS 之前，避免静态资源被 CORS 拦截）
+const distPath = join(__dirname, '..', 'dist');
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+  console.log('[部署] 已托管前端静态文件:', distPath);
+} else {
+  console.log('[部署] 未找到 dist 目录，前端请使用开发模式访问 http://localhost:5173');
+}
+
+// 2. 安全 HTTP headers（防止 XSS、点击劫持、嗅探等）
 app.use(helmet());
 
-// 2. CORS 配置：支持公网访问
+// 3. CORS 配置：支持公网访问
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
@@ -208,20 +217,11 @@ app.use(cors({
   credentials: true
 }));
 
-// 3. 请求体大小限制（防止大请求攻击）
+// 4. 请求体大小限制（防止大请求攻击）
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
-// 3.5 生产环境托管前端静态文件（必须在 API 路由之前）
-const distPath = join(__dirname, '..', 'dist');
-if (fs.existsSync(distPath)) {
-  app.use(express.static(distPath));
-  console.log('[部署] 已托管前端静态文件:', distPath);
-} else {
-  console.log('[部署] 未找到 dist 目录，前端请使用开发模式访问 http://localhost:5173');
-}
-
-// 4. 全局请求频率限制（每个 IP 最多 100 请求/15分钟）
+// 5. 全局请求频率限制（每个 IP 最多 100 请求/15分钟）
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 200,
