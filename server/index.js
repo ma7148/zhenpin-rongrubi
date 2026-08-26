@@ -13,6 +13,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
+import { loadEmailConfig, sendConfirmationEmail } from './email-service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -97,9 +98,19 @@ async function initDatabase() {
     saveDb();
   } catch (e) { /* 忽略 */ }
 
+  // 添加phone字段到users表（用于水印）
+  try {
+    db.run('ALTER TABLE users ADD COLUMN phone TEXT');
+  } catch (e) { /* 字段已存在，忽略 */ }
+
   // 兼容旧数据库：添加is_director字段
   try {
     db.run('ALTER TABLE employees ADD COLUMN is_director INTEGER DEFAULT 0');
+  } catch (e) { /* 字段已存在，忽略 */ }
+
+  // 添加watermark字段到record_items表（用于日志水印）
+  try {
+    db.run('ALTER TABLE record_items ADD COLUMN watermark TEXT');
   } catch (e) { /* 字段已存在，忽略 */ }
 
   db.run(`
@@ -140,6 +151,7 @@ async function initDatabase() {
       title TEXT NOT NULL,
       description TEXT,
       date DATE NOT NULL,
+      watermark TEXT,
       FOREIGN KEY (record_id) REFERENCES records(id) ON DELETE CASCADE
     )
   `);
@@ -181,6 +193,73 @@ async function initDatabase() {
 }
 
 const app = express();
+
+// ============ 数据库自动备份 ============
+
+// 备份数据库到邮箱
+async function backupDatabase() {
+  try {
+    const emailConfig = getEmailConfig();
+    if (!emailConfig || !emailConfig.enabled) {
+      console.log('[备份] 邮箱未配置或已禁用，跳过备份');
+      return;
+    }
+
+    // 读取数据库文件
+    const dbPath = join(__dirname, 'database', 'rongrubi.db');
+    if (!fs.existsSync(dbPath)) {
+      console.log('[备份] 数据库文件不存在，跳过备份');
+      return;
+    }
+
+    const dbBuffer = fs.readFileSync(dbPath);
+    
+    // 创建nodemailer transporter
+    const nodemailer = await import('nodemailer');
+    const transporter = nodemailer.default.createTransport({
+      host: emailConfig.smtpHost,
+      port: emailConfig.smtpPort,
+      secure: true,
+      auth: {
+        user: emailConfig.email,
+        pass: emailConfig.password
+      }
+    });
+
+    // 发送邮件
+    await transporter.sendMail({
+      from: emailConfig.email,
+      to: emailConfig.email,
+      subject: `【自动备份】臻品足道荣辱榜数据库 - ${new Date().toLocaleString('zh-CN')}`,
+      text: `数据库自动备份\n备份时间: ${new Date().toLocaleString('zh-CN')}\n数据库大小: ${(dbBuffer.length / 1024).toFixed(2)} KB`,
+      attachments: [
+        {
+          filename: `rongrubi_backup_${Date.now()}.db`,
+          content: dbBuffer
+        }
+      ]
+    });
+
+    console.log('[备份] 数据库备份邮件发送成功');
+  } catch (err) {
+    console.error('[备份] 备份失败:', err.message);
+  }
+}
+
+// 启动定时备份(每6小时一次)
+function startAutoBackup() {
+  const SIX_HOURS = 6 * 60 * 60 * 1000;
+  setInterval(async () => {
+    console.log('[备份] 开始自动备份...');
+    await backupDatabase();
+  }, SIX_HOURS);
+  
+  // 首次启动时立即备份一次
+  setTimeout(async () => {
+    console.log('[备份] 启动时立即备份...');
+    await backupDatabase();
+  }, 5000);
+}
 
 // ============ 安全加固 ============
 
@@ -913,6 +992,12 @@ app.post('/api/records', authenticate, noViewer, (req, res) => {
     return res.status(400).json({ error: '该员工该月份的记录已提交' });
   }
 
+  // 获取提交者手机号（用于水印）
+  const submitterPhone = req.user.phone || '未知';
+  
+  // 生成水印：门店+手机号
+  const watermark = `${employee.store_name} - ${submitterPhone}`;
+
   try {
     // 使用员工的store_name，而不是提交者的store_name
     const recordStoreName = employee.store_name || req.user.store_name;
@@ -925,13 +1010,13 @@ app.post('/api/records', authenticate, noViewer, (req, res) => {
 
     items.forEach(item => {
       dbRun(
-        'INSERT INTO record_items (record_id, type, title, description, date) VALUES (?, ?, ?, ?, ?)',
-        [recordId, item.type, item.title, item.description || '', item.date]
+        'INSERT INTO record_items (record_id, type, title, description, date, watermark) VALUES (?, ?, ?, ?, ?, ?)',
+        [recordId, item.type, item.title, item.description || '', item.date, watermark]
       );
     });
 
     saveDb();
-    res.json({ id: recordId, message: '提交成功' });
+    res.json({ id: recordId, message: '提交成功', watermark });
   } catch (err) {
     res.status(500).json({ error: '提交失败' });
   }
@@ -2266,6 +2351,9 @@ initDatabase().then(() => {
   app.listen(PORT, () => {
     console.log(`服务器运行在 http://localhost:${PORT}`);
   });
+  
+  // 启动自动备份(每6小时一次)
+  startAutoBackup();
 }).catch(err => {
   console.error('数据库初始化失败:', err);
   process.exit(1);
