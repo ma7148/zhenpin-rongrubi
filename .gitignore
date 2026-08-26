@@ -2,8 +2,8 @@
 node_modules/
 package-lock.json
 
-# 构建输出
-dist/
+# 构建输出（Railway 部署需要 dist 目录）
+# dist/
 
 # 数据库文件
 server/database/*.db
