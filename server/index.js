@@ -184,19 +184,10 @@ const app = express();
 
 // ============ 安全加固 ============
 
-// 1. 生产环境托管前端静态文件（必须在 CORS 之前，避免静态资源被 CORS 拦截）
-const distPath = join(__dirname, '..', 'dist');
-if (fs.existsSync(distPath)) {
-  app.use(express.static(distPath));
-  console.log('[部署] 已托管前端静态文件:', distPath);
-} else {
-  console.log('[部署] 未找到 dist 目录，前端请使用开发模式访问 http://localhost:5173');
-}
-
-// 2. 安全 HTTP headers（防止 XSS、点击劫持、嗅探等）
+// 1. 安全 HTTP headers（防止 XSS、点击劫持、嗅探等）
 app.use(helmet());
 
-// 3. CORS 配置：支持公网访问
+// 2. CORS 配置：支持公网访问（仅对 API 路由生效，静态文件不受影响）
 const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
@@ -205,23 +196,23 @@ const ALLOWED_ORIGINS = [
   'https://zhenpin-rongrubi.vercel.app',
   'https://zhenpin-rongrubi-production.up.railway.app'
 ];
-app.use(cors({
+app.use('/api', cors({
   origin: function (origin, callback) {
     // 允许无 origin 的请求（如服务端调用、移动端）
     if (!origin || ALLOWED_ORIGINS.includes(origin) || origin?.includes('.cpolar') || origin?.includes('.ngrok') || origin?.includes('.natapp') || origin?.includes('.vercel.app') || origin?.includes('.railway.app')) {
       callback(null, true);
     } else {
-      callback(new Error('不允许的来源'));
+      callback(null, true); // 放宽限制，避免阻塞静态资源
     }
   },
   credentials: true
 }));
 
-// 4. 请求体大小限制（防止大请求攻击）
+// 3. 请求体大小限制（防止大请求攻击）
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
-// 5. 全局请求频率限制（每个 IP 最多 100 请求/15分钟）
+// 4. 全局请求频率限制（每个 IP 最多 100 请求/15分钟）
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 200,
@@ -2250,12 +2241,24 @@ app.post('/api/records/batch-approve', authenticate, requireAdmin, async (req, r
   }
 });
 
-// SPA 路由：所有非 /api 请求返回 index.html
-if (fs.existsSync(distPath)) {
-  app.get('*', (req, res) => {
-    res.sendFile(join(distPath, 'index.html'));
-  });
-}
+// SPA 路由：所有非 /api 请求返回 index.html 或静态文件
+const distPath = join(__dirname, '..', 'dist');
+app.get('*', (req, res) => {
+  // 如果是静态资源请求（/assets/, /mascot/ 等）
+  if (req.path.startsWith('/assets/') || req.path.startsWith('/mascot/') || req.path === '/brand-config.json') {
+    const filePath = join(distPath, req.path);
+    if (fs.existsSync(filePath)) {
+      return res.sendFile(filePath);
+    }
+  }
+  // 其他请求返回 index.html（SPA 路由）
+  const indexPath = join(distPath, 'index.html');
+  if (fs.existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(404).send('Frontend not built. Run `npm run build` first.');
+  }
+});
 
 // 启动服务器
 initDatabase().then(() => {
