@@ -212,6 +212,15 @@ app.use(cors({
 app.use(express.json({ limit: '5mb' }));
 app.use(express.urlencoded({ extended: true, limit: '5mb' }));
 
+// 3.5 生产环境托管前端静态文件（必须在 API 路由之前）
+const distPath = join(__dirname, '..', 'dist');
+if (fs.existsSync(distPath)) {
+  app.use(express.static(distPath));
+  console.log('[部署] 已托管前端静态文件:', distPath);
+} else {
+  console.log('[部署] 未找到 dist 目录，前端请使用开发模式访问 http://localhost:5173');
+}
+
 // 4. 全局请求频率限制（每个 IP 最多 100 请求/15分钟）
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
@@ -2241,18 +2250,11 @@ app.post('/api/records/batch-approve', authenticate, requireAdmin, async (req, r
   }
 });
 
-// 生产环境服务静态文件
-// ============ 托管前端静态文件（生产部署） ============
-const distPath = join(__dirname, '..', 'dist');
+// SPA 路由：所有非 /api 请求返回 index.html
 if (fs.existsSync(distPath)) {
-  app.use(express.static(distPath));
-  // SPA 路由：所有非 /api 请求返回 index.html
   app.get('*', (req, res) => {
     res.sendFile(join(distPath, 'index.html'));
   });
-  console.log('[部署] 已托管前端静态文件:', distPath);
-} else {
-  console.log('[部署] 未找到 dist 目录，前端请使用开发模式访问 http://localhost:5173');
 }
 
 // 启动服务器
