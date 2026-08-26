@@ -192,12 +192,14 @@ const ALLOWED_ORIGINS = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   'http://localhost:3000',
-  'http://localhost:3002'
+  'http://localhost:3002',
+  'https://zhenpin-rongrubi.vercel.app',
+  'https://zhenpin-rongrubi-production.up.railway.app'
 ];
 app.use(cors({
   origin: function (origin, callback) {
     // 允许无 origin 的请求（如服务端调用、移动端）
-    if (!origin || ALLOWED_ORIGINS.includes(origin) || origin?.includes('.cpolar') || origin?.includes('.ngrok') || origin?.includes('.natapp')) {
+    if (!origin || ALLOWED_ORIGINS.includes(origin) || origin?.includes('.cpolar') || origin?.includes('.ngrok') || origin?.includes('.natapp') || origin?.includes('.vercel.app') || origin?.includes('.railway.app')) {
       callback(null, true);
     } else {
       callback(new Error('不允许的来源'));
