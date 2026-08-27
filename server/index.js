@@ -122,6 +122,16 @@ async function initDatabase() {
     db.run('ALTER TABLE users ADD COLUMN phone TEXT');
   } catch (e) { /* 字段已存在，忽略 */ }
 
+  // 兼容旧数据库：添加hire_date字段
+  try {
+    db.run('ALTER TABLE employees ADD COLUMN hire_date DATE');
+  } catch (e) { /* 字段已存在，忽略 */ }
+
+  // 兼容旧数据库：添加store_number字段（店家编号）
+  try {
+    db.run('ALTER TABLE employees ADD COLUMN store_number TEXT');
+  } catch (e) { /* 字段已存在，忽略 */ }
+
   // 兼容旧数据库：添加is_director字段
   try {
     db.run('ALTER TABLE employees ADD COLUMN is_director INTEGER DEFAULT 0');
@@ -214,7 +224,7 @@ async function initDatabase() {
     const hashedPassword = bcrypt.hashSync('admin123', 10);
     dbRun('INSERT INTO users (username, password, role) VALUES (?, ?, ?)', ['admin', hashedPassword, 'admin']);
 
-    const stores = ['北京旗舰店', '上海分店', '广州分店'];
+    const stores = ['光谷天地店', '杨家湾店', '南京路店'];
     stores.forEach(store => {
       const username = store.substring(0, 2);
       const pwd = bcrypt.hashSync('store123', 10);
@@ -224,7 +234,121 @@ async function initDatabase() {
     saveDb();
     console.log('已创建默认账户：');
     console.log('  总部管理员 - 用户名: admin, 密码: admin123');
-    console.log('  门店账户 - 用户名: 北京/上海/广州, 密码: store123');
+    console.log('  门店账户 - 用户名: 光谷/杨家/南京, 密码: store123');
+  }
+
+  // 门店名称迁移：旧门店 → 新门店
+  const storeMigration = [
+    { oldName: '北京旗舰店', newName: '光谷天地店', oldUser: '北京', newUser: '光谷' },
+    { oldName: '上海分店', newName: '杨家湾店', oldUser: '上海', newUser: '杨家' },
+    { oldName: '广州分店', newName: '南京路店', oldUser: '广州', newUser: '南京' },
+  ];
+  storeMigration.forEach(({ oldName, newName, oldUser, newUser }) => {
+    const user = dbGet('SELECT id FROM users WHERE username = ?', [oldUser]);
+    if (user) {
+      dbRun('UPDATE users SET username = ?, store_name = ? WHERE username = ?', [newUser, newName, oldUser]);
+      console.log(`[迁移] 用户 ${oldUser} → ${newUser}, 门店 ${oldName} → ${newName}`);
+    }
+    dbRun('UPDATE employees SET store_name = ? WHERE store_name = ?', [newName, oldName]);
+    dbRun('UPDATE records SET store_name = ? WHERE store_name = ?', [newName, oldName]);
+  });
+
+  // 店家编号映射（按用户提供的顺序）
+  const storeNumberMap = {
+    '功夫Pai金银潭永旺店': 'NO1',
+    '头等舱·武汉新天地店': 'NO1',
+    '头等舱·万象城店': 'NO2',
+    '光谷天地店': 'NO3',
+    '杨家湾店': 'NO4',
+    '南京路店': 'NO6',
+    '江腾广场店': 'NO7',
+    '宝丰路店': 'NO8',
+    '一元路店': 'NO9',
+    '汉街店': 'NO10',
+    '后湖店': 'NO12',
+    '王家湾店': 'NO13',
+    '会展中心店': 'NO14',
+    '人信汇店': 'NO15',
+    '汉街精选店': 'NO16',
+    '范湖万达店': 'NO17',
+    '沌口店': 'NO18',
+    '永旺店': 'NO19',
+    '佳园路店': 'NO20',
+    '凯德西城店': 'NO21',
+    '融侨华府店': 'NO22',
+    '佛祖岭店': 'NO23',
+    '同学广场店': 'NO24',
+    '钟家村店': 'NO25',
+    '新华家园店': 'NO26',
+    '洪山万科店': 'NO27',
+    '南湖店': 'NO28',
+    '欢乐谷店': 'NO29',
+    '青山印象城店': 'NO30',
+    '新世界国贸店': 'NO31',
+    '江夏纸坊店': 'NO32',
+  };
+
+  // 旧门店名称 → 新门店名称映射（全面覆盖）
+  const storeNameMigration = {
+    '楚河汉街店': '汉街店',
+    '青年路店': '宝丰路店',
+    '汉阳店': '人信汇店',
+    '范湖店': '范湖万达店',
+    '范湖万达': '范湖万达店',
+    '金潭中心店': '会展中心店',
+    '八佰店': '凯德西城店',
+    '汉阳四新大道店': '汉街精选店',
+    '汉商银座店': '融侨华府店',
+    '康桥居店': '佛祖岭店',
+    '茂华居店': '同学广场店',
+    '同学广场': '同学广场店',
+    '茶百道店': '青山印象城店',
+    '青山印象城': '青山印象城店',
+    '新世界百货店': '新世界国贸店',
+    '武汉新天地店': '头等舱·武汉新天地店',
+    '武汉天地店': '头等舱·武汉新天地店',
+    '武昌万商店': '头等舱·万象城店',
+    '万象城店': '头等舱·万象城店',
+    '公司总部': '公司总部',
+    '光谷天地店': '光谷天地店',
+    '杨家湾店': '杨家湾店',
+    '南京路店': '南京路店',
+    '江腾广场店': '江腾广场店',
+    '一元路店': '一元路店',
+    '后湖店': '后湖店',
+    '王家湾店': '王家湾店',
+    '沌口店': '沌口店',
+    '永旺店': '永旺店',
+    '佳园路店': '佳园路店',
+    '钟家村店': '钟家村店',
+    '钟家村': '钟家村店',
+    '新华家园店': '新华家园店',
+    '洪山万科店': '洪山万科店',
+    '万科店': '洪山万科店',
+    '万科': '洪山万科店',
+    '南湖店': '南湖店',
+    '欢乐谷店': '欢乐谷店',
+    '江夏纸坊店': '江夏纸坊店',
+  };
+
+  // 先迁移门店名称
+  Object.entries(storeNameMigration).forEach(([oldName, newName]) => {
+    dbRun('UPDATE employees SET store_name = ? WHERE store_name = ?', [newName, oldName]);
+    dbRun('UPDATE records SET store_name = ? WHERE store_name = ?', [newName, oldName]);
+    dbRun('UPDATE users SET store_name = ? WHERE store_name = ?', [newName, oldName]);
+  });
+
+  // 再更新所有员工的店家编号
+  const allEmployees = dbAll('SELECT id, store_name FROM employees');
+  allEmployees.forEach(emp => {
+    const number = storeNumberMap[emp.store_name];
+    if (number) {
+      dbRun('UPDATE employees SET store_number = ? WHERE id = ?', [number, emp.id]);
+    }
+  });
+  if (allEmployees.length > 0) {
+    saveDb();
+    console.log(`[店家编号] 已为 ${allEmployees.length} 名员工更新店家编号`);
   }
 }
 
@@ -738,10 +862,16 @@ app.post('/api/admin/stores', authenticate, noViewer, (req, res) => {
   }
   
   // 创建一个虚拟员工记录来保存门店名称
-  dbRun(
-    'INSERT INTO employees (name, store_name, id_number, is_director, hire_date) VALUES (?, ?, ?, 0, ?)',
-    [`[门店] ${trimmedName}`, trimmedName, `STORE-${Date.now()}`, new Date().toISOString().split('T')[0]]
-  );
+  try {
+    dbRun(
+      'INSERT INTO employees (name, store_name, id_number, is_director, promotion_date) VALUES (?, ?, ?, 0, ?)',
+      [`[门店] ${trimmedName}`, trimmedName, `STORE-${Date.now()}`, new Date().toISOString().split('T')[0]]
+    );
+    saveDb();
+  } catch (err) {
+    console.error('[门店创建] 数据库错误:', err.message);
+    return res.status(500).json({ error: '创建失败: ' + err.message });
+  }
   
   console.log(`✓ 管理员 ${req.user.username} 创建了新门店: ${trimmedName}`);
   
@@ -858,7 +988,7 @@ app.get('/api/employees', authenticate, (req, res) => {
     params.push(req.user.store_name);
   }
 
-  sql += ' ORDER BY created_at DESC';
+  sql += " ORDER BY CASE WHEN store_number IS NOT NULL THEN CAST(REPLACE(store_number, 'NO', '') AS INTEGER) ELSE 999 END, created_at DESC";
   const employees = dbAll(sql, params);
   
   // 为每个员工添加入职年限
@@ -871,15 +1001,56 @@ app.get('/api/employees', authenticate, (req, res) => {
   res.json({ employees: employeesWithYears });
 });
 
-app.post('/api/employees', authenticate, requireAdmin, (req, res) => {
-  const { name, id_number, store_name, promotion_date } = req.body;
+// 门店账户创建员工（可选择门店）
+app.post('/api/store/employees', authenticate, (req, res) => {
+  const { name, id_number, hire_date, promotion_date, store_name } = req.body;
 
-  if (!name || !id_number || !store_name || !promotion_date) {
+  if (!name || !id_number) {
+    return res.status(400).json({ error: '姓名和身份证号不能为空' });
+  }
+
+  // 门店账户只能选择自己的门店，admin可选择任意门店
+  let finalStoreName = store_name;
+  if (req.user.role === 'store') {
+    finalStoreName = req.user.store_name;
+    if (!finalStoreName) {
+      return res.status(400).json({ error: '当前账户未绑定门店' });
+    }
+  }
+  if (!finalStoreName) {
+    return res.status(400).json({ error: '请选择所属门店' });
+  }
+
+  try {
+    const result = dbRun(
+      'INSERT INTO employees (name, id_number, store_name, hire_date, promotion_date, is_director) VALUES (?, ?, ?, ?, ?, 0)',
+      [name, id_number, finalStoreName, hire_date || null, promotion_date || null]
+    );
+    saveDb();
+
+    logOperation(req, 'CREATE', 'employee', result.lastInsertRowid, {
+      name,
+      store_name: finalStoreName
+    });
+
+    res.json({ id: result.lastInsertRowid, message: '添加成功' });
+  } catch (err) {
+    if (err.message && err.message.includes('UNIQUE')) {
+      return res.status(400).json({ error: '身份证号已存在' });
+    }
+    res.status(500).json({ error: '添加失败: ' + err.message });
+  }
+});
+
+app.post('/api/employees', authenticate, requireAdmin, (req, res) => {
+  const { name, id_number, store_name, promotion_date, hire_date } = req.body;
+
+  if (!name || !id_number || !store_name) {
     return res.status(400).json({ error: '请填写完整信息' });
   }
 
   try {
-    const result = dbRun('INSERT INTO employees (name, id_number, store_name, promotion_date) VALUES (?, ?, ?, ?)', [name, id_number, store_name, promotion_date]);
+    const result = dbRun('INSERT INTO employees (name, id_number, store_name, hire_date, promotion_date) VALUES (?, ?, ?, ?, ?)', [name, id_number, store_name, hire_date || null, promotion_date || null]);
     saveDb();
     
     // 记录日志
@@ -1230,6 +1401,36 @@ app.put('/api/users/:id/reset-password', authenticate, requireAdmin, (req, res) 
   res.json({ message: `已重置 ${user.username} 的密码` });
 });
 
+// 修改自己的密码
+app.put('/api/users/change-password', authenticate, (req, res) => {
+  const { oldPassword, newPassword } = req.body;
+  const userId = req.user.id;
+  
+  if (!oldPassword || !newPassword) {
+    return res.status(400).json({ error: '请填写完整' });
+  }
+  
+  if (newPassword.length < 6) {
+    return res.status(400).json({ error: '新密码至少6位' });
+  }
+  
+  const user = dbGet('SELECT * FROM users WHERE id = ?', [userId]);
+  if (!user) {
+    return res.status(404).json({ error: '用户不存在' });
+  }
+  
+  // 验证旧密码
+  if (!bcrypt.compareSync(oldPassword, user.password)) {
+    return res.status(400).json({ error: '原密码错误' });
+  }
+  
+  const hashedPassword = bcrypt.hashSync(newPassword, 10);
+  dbRun('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, userId]);
+  saveDb();
+  console.log('[修改密码]', req.user.username, '修改了密码');
+  res.json({ message: '密码修改成功' });
+});
+
 // 禁用/启用账户
 app.put('/api/users/:id/toggle-status', authenticate, requireAdmin, (req, res) => {
   const userId = req.params.id;
@@ -1270,13 +1471,28 @@ app.delete('/api/users/:id', authenticate, requireAdmin, (req, res) => {
 
 // 获取门店列表（从员工表和用户表合并获取所有门店）
 app.get('/api/stores', authenticate, (req, res) => {
-  const storesFromEmployees = dbAll('SELECT DISTINCT store_name FROM employees WHERE store_name IS NOT NULL');
+  const storesFromEmployees = dbAll('SELECT DISTINCT store_name, store_number FROM employees WHERE store_name IS NOT NULL');
   const storesFromUsers = dbAll('SELECT DISTINCT store_name FROM users WHERE role = ? AND store_name IS NOT NULL', ['store']);
-  const allStores = new Set([
-    ...storesFromEmployees.map(s => s.store_name),
-    ...storesFromUsers.map(s => s.store_name)
-  ]);
-  res.json({ stores: [...allStores] });
+  const allStores = new Map();
+  // 添加员工表中的门店（带编号）
+  storesFromEmployees.forEach(s => {
+    if (s.store_name) allStores.set(s.store_name, s.store_number || null);
+  });
+  // 添加用户表中的门店
+  storesFromUsers.forEach(s => {
+    if (s.store_name && !allStores.has(s.store_name)) allStores.set(s.store_name, null);
+  });
+  // 转换为数组并按编号排序
+  const result = [...allStores.entries()].map(([name, number]) => ({ name, number }));
+  result.sort((a, b) => {
+    const getNum = (n) => {
+      if (!n) return 999;
+      const num = parseInt(n.replace('NO', ''));
+      return isNaN(num) ? 999 : num;
+    };
+    return getNum(a.number) - getNum(b.number);
+  });
+  res.json({ stores: result });
 });
 
 // 文件上传
@@ -1511,9 +1727,9 @@ function detectType(text) {
 function extractStoreFromFilename(filename) {
   const storePatterns = [
     '南京路店', '汉街店', '汉街精选店', '江腾广场店', '范湖万达店',
-    '钟家村店', '青山印象城店', '凯德店', '杨家湾店', '万象城店',
-    '武汉天地店', '万科店', '融侨华府店', '永旺店', '王家湾店',
-    '江夏纸坊店'
+    '钟家村店', '青山印象城店', '凯德西城店', '杨家湾店', '头等舱·万象城店',
+    '头等舱·武汉新天地店', '洪山万科店', '融侨华府店', '永旺店', '王家湾店',
+    '江夏纸坊店', '同学广场店'
   ];
   for (const store of storePatterns) {
     const keyword = store.replace('店', '');
@@ -2425,7 +2641,7 @@ app.use('/assets', (req, res, next) => {
 
 app.get('*', (req, res) => {
   // 如果是静态资源请求（/assets/, /mascot/ 等）
-  if (req.path.startsWith('/assets/') || req.path.startsWith('/mascot/') || req.path === '/brand-config.json') {
+  if (req.path.startsWith('/assets/') || req.path.startsWith('/mascot/') || req.path === '/brand-config.json' || req.path === '/logo.png') {
     const filePath = join(distPath, req.path);
     if (fs.existsSync(filePath)) {
       return res.sendFile(filePath);
