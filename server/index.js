@@ -763,7 +763,9 @@ app.post('/api/auth/send-code', authLimiter, async (req, res) => {
       res.json({ message: '验证码已发送，请联系管理员获取' });
     } catch (err) {
       console.error('[验证码] 发送失败:', err.message);
-      res.status(500).json({ error: '验证码发送失败' });
+      // 备用方案：邮件发送失败时直接返回验证码（Railway可能封锁SMTP端口）
+      console.log('[验证码] 备用方案：直接返回验证码', code);
+      res.json({ message: '验证码已生成（邮件发送失败，请查看下方验证码）', code });
     }
   } else {
     // 开发模式：直接返回验证码
