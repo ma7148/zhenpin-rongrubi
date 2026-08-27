@@ -300,7 +300,10 @@ function startAutoBackup() {
 // ============ 安全加固 ============
 
 // 1. 安全 HTTP headers（防止 XSS、点击劫持、嗅探等）
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: false, // 允许静态资源跨域加载（解决 Vite crossorigin 问题）
+  contentSecurityPolicy: false      // 允许内联脚本和样式
+}));
 
 // 2. CORS 配置：支持公网访问（仅对 API 路由生效，静态文件不受影响）
 const ALLOWED_ORIGINS = [
@@ -2412,6 +2415,14 @@ app.post('/api/records/batch-approve', authenticate, requireAdmin, async (req, r
 
 // SPA 路由：所有非 /api 请求返回 index.html 或静态文件
 const distPath = join(__dirname, '..', 'dist');
+
+// 静态文件 CORS 头（解决 Vite 构建时 crossorigin 属性导致的 CORS 问题）
+app.use('/assets', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+  next();
+});
+
 app.get('*', (req, res) => {
   // 如果是静态资源请求（/assets/, /mascot/ 等）
   if (req.path.startsWith('/assets/') || req.path.startsWith('/mascot/') || req.path === '/brand-config.json') {
