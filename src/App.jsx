@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard';
 import EmployeeBoard from './pages/EmployeeBoard';
 import Employees from './pages/Employees';
 import Users from './pages/Users';
+import Records from './pages/Records';
 import api from './api';
 
 function App() {
@@ -52,6 +53,7 @@ function App() {
           <>
             <Route path="/" element={<Layout user={user} onLogout={handleLogout} />}>
               <Route index element={<EmployeeBoard user={user} />} />
+              <Route path="records" element={<Records user={user} />} />
               {user.role === 'admin' && <Route path="employees" element={<Employees />} />}
               {user.role === 'admin' && <Route path="users" element={<Users />} />}
             </Route>

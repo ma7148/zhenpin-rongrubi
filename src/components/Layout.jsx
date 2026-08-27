@@ -1,11 +1,14 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { Layout as AntLayout, Menu, Button, theme, Typography } from 'antd';
+import { Layout as AntLayout, Menu, Button, Modal, Form, Input, message, theme, Typography } from 'antd';
 import {
   CrownOutlined,
   TeamOutlined,
-  LogoutOutlined
+  FileTextOutlined,
+  LogoutOutlined,
+  KeyOutlined
 } from '@ant-design/icons';
+import api from '../api';
 
 const { Header, Sider, Content } = AntLayout;
 const { Text } = Typography;
@@ -14,9 +17,28 @@ function Layout({ user, onLogout }) {
   const navigate = useNavigate();
   const location = useLocation();
   const { token: { colorBgContainer } } = theme.useToken();
+  const [changePwdVisible, setChangePwdVisible] = useState(false);
+  const [changePwdForm] = Form.useForm();
+
+  const handleChangePassword = async () => {
+    try {
+      const values = await changePwdForm.validateFields();
+      await api.put('/api/users/change-password', {
+        oldPassword: values.oldPassword,
+        newPassword: values.newPassword
+      });
+      message.success('密码修改成功，请重新登录');
+      setChangePwdVisible(false);
+      changePwdForm.resetFields();
+      onLogout();
+    } catch (err) {
+      message.error(err.response?.data?.error || '修改失败');
+    }
+  };
 
   const menuItems = [
     { key: '/', icon: <CrownOutlined />, label: '员工荣辱榜' },
+    { key: '/records', icon: <FileTextOutlined />, label: '记录管理' },
     ...(user.role === 'admin' ? [{ key: '/users', icon: <TeamOutlined />, label: '用户管理' }] : [])
   ];
 
@@ -43,6 +65,9 @@ function Layout({ user, onLogout }) {
               {user.role === 'admin' ? '总部管理员' : `门店: ${user.store_name}`}
             </Text>
             <Text>{user.username}</Text>
+            <Button type="text" icon={<KeyOutlined />} onClick={() => setChangePwdVisible(true)}>
+              修改密码
+            </Button>
             <Button type="text" icon={<LogoutOutlined />} onClick={onLogout}>
               退出
             </Button>
@@ -52,6 +77,53 @@ function Layout({ user, onLogout }) {
           <Outlet />
         </Content>
       </AntLayout>
+
+      {/* 修改密码弹窗 */}
+      <Modal
+        title="修改密码"
+        open={changePwdVisible}
+        onOk={handleChangePassword}
+        onCancel={() => { setChangePwdVisible(false); changePwdForm.resetFields(); }}
+        okText="确认修改"
+      >
+        <Form form={changePwdForm} layout="vertical" style={{ marginTop: 16 }}>
+          <Form.Item
+            name="oldPassword"
+            label="原密码"
+            rules={[{ required: true, message: '请输入原密码' }]}
+          >
+            <Input.Password placeholder="请输入原密码" />
+          </Form.Item>
+          <Form.Item
+            name="newPassword"
+            label="新密码"
+            rules={[
+              { required: true, message: '请输入新密码' },
+              { min: 6, message: '密码至少6位' }
+            ]}
+          >
+            <Input.Password placeholder="请输入新密码（至少6位）" />
+          </Form.Item>
+          <Form.Item
+            name="confirmPassword"
+            label="确认新密码"
+            dependencies={['newPassword']}
+            rules={[
+              { required: true, message: '请确认新密码' },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value || getFieldValue('newPassword') === value) {
+                    return Promise.resolve();
+                  }
+                  return Promise.reject(new Error('两次输入的密码不一致'));
+                },
+              }),
+            ]}
+          >
+            <Input.Password placeholder="请再次输入新密码" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </AntLayout>
   );
 }

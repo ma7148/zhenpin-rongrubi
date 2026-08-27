@@ -20,6 +20,7 @@ const { Search } = Input;
 function EmployeeBoard({ user }) {
   const [employees, setEmployees] = useState([]);
   const [stores, setStores] = useState([]);
+  const [storeNumbers, setStoreNumbers] = useState({});
   const [allRecords, setAllRecords] = useState([]);
   const [filterStore, setFilterStore] = useState(null);
   const [filterName, setFilterName] = useState('');
@@ -34,12 +35,17 @@ function EmployeeBoard({ user }) {
   // 加载员工、门店和所有记录
   useEffect(() => {
     api.get('/api/employees').then(res => setEmployees(res.data.employees || [])).catch(() => {});
-    api.get('/api/stores').then(res => setStores(res.data.stores || [])).catch(() => {});
+    api.get('/api/stores').then(res => {
+      const storeData = res.data.stores || [];
+      setStores(storeData.map(s => s.name));
+      setStoreNumbers(storeData.reduce((acc, s) => { acc[s.name] = s.number; return acc; }, {}));
+    }).catch(() => {});
     api.get('/api/records?status=approved').then(res => setAllRecords(res.data.records || [])).catch(() => {});
   }, []);
 
-  // 筛选员工
+  // 筛选员工（排除虚拟门店记录）
   const filteredEmployees = employees.filter(emp => {
+    if (emp.name.startsWith('[门店]')) return false; // 隐藏虚拟门店记录
     if (filterStore && emp.store_name !== filterStore) return false;
     if (filterName && !emp.name.includes(filterName)) return false;
     return true;
@@ -49,7 +55,7 @@ function EmployeeBoard({ user }) {
   const storeStats = {};
   filteredEmployees.forEach(emp => {
     const key = emp.store_name;
-    if (!storeStats[key]) storeStats[key] = { total: 0, employees: [] };
+    if (!storeStats[key]) storeStats[key] = { total: 0, employees: [], store_number: emp.store_number || null };
     // 查找是否已存在同名员工
     const existing = storeStats[key].employees.find(e => e.name === emp.name);
     if (existing) {
@@ -64,6 +70,17 @@ function EmployeeBoard({ user }) {
       storeStats[key].employees.push(emp);
       storeStats[key].total++;
     }
+  });
+
+  // 按店家编号排序：NO1、NO2排最前，其余按编号升序，无编号的排最后，公司总部排最后
+  const sortedStoreEntries = Object.entries(storeStats).sort(([, a], [, b]) => {
+    const getNum = (sn, name) => {
+      if (name === '公司总部') return 9999; // 公司总部排最后
+      if (!sn) return 999; // 无编号的排倒数第二
+      const n = parseInt(sn.replace('NO', ''));
+      return isNaN(n) ? 999 : n;
+    };
+    return getNum(a.store_number, a.employees[0]?.store_name || '') - getNum(b.store_number, b.employees[0]?.store_name || '');
   });
 
   // 点击员工查看详细信息
@@ -308,7 +325,9 @@ function EmployeeBoard({ user }) {
               showSearch
             >
               {stores.map(s => (
-                <Select.Option key={s} value={s}>{s}</Select.Option>
+                <Select.Option key={s} value={s}>
+                  {storeNumbers[s] ? <><Tag color="blue" style={{ marginRight: 8 }}>{storeNumbers[s]}</Tag>{s}</> : s}
+                </Select.Option>
               ))}
             </Select>
           </Col>
@@ -326,13 +345,14 @@ function EmployeeBoard({ user }) {
           <Empty description="暂无员工数据" />
         </Card>
       ) : (
-        Object.entries(storeStats).map(([storeName, data]) => (
+        sortedStoreEntries.map(([storeName, data]) => (
           <div key={storeName} style={{ marginBottom: 24 }}>
             <div style={{
               display: 'flex', alignItems: 'center', gap: 8,
               marginBottom: 12, paddingBottom: 8,
               borderBottom: '2px solid #f0f0f0'
             }}>
+              {data.store_number && <Tag color="purple" style={{ fontSize: 13, padding: '2px 8px' }}>{data.store_number}</Tag>}
               <EnvironmentOutlined style={{ color: '#1890ff', fontSize: 18 }} />
               <Title level={5} style={{ margin: 0 }}>{storeName}</Title>
               <Tag color="blue">{data.total}人</Tag>

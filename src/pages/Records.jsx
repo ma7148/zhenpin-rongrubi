@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Table, Button, Modal, Form, Input, Select, DatePicker,
+  Table, Button, Modal, Form, Input, Select, DatePicker, AutoComplete,
   message, Card, Typography, Space, Tag, Popconfirm, Row, Col
 } from 'antd';
-import { PlusOutlined, CheckOutlined, CloseOutlined, DeleteOutlined, ImportOutlined } from '@ant-design/icons';
+import { PlusOutlined, CheckOutlined, CloseOutlined, DeleteOutlined, ImportOutlined, UserAddOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import 'dayjs/locale/zh-cn';
+dayjs.locale('zh-cn');
 import api from '../api';
 import ImportModal from '../components/ImportModal';
 
@@ -15,6 +17,7 @@ function Records({ user }) {
   const [records, setRecords] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [stores, setStores] = useState([]);
+  const [storeNumbers, setStoreNumbers] = useState({});
   const [loading, setLoading] = useState(false);
   const [submitModalVisible, setSubmitModalVisible] = useState(false);
   const [reviewModalVisible, setReviewModalVisible] = useState(false);
@@ -26,6 +29,10 @@ function Records({ user }) {
   const [filterMonth, setFilterMonth] = useState(null);
   const [filterStore, setFilterStore] = useState(null);
   const [importModalVisible, setImportModalVisible] = useState(false);
+  const [selectedEmpInfo, setSelectedEmpInfo] = useState(null); // 选中员工的详细信息
+  const [empSearch, setEmpSearch] = useState(''); // 员工搜索输入
+  const [addEmpModalVisible, setAddEmpModalVisible] = useState(false); // 新建员工弹窗
+  const [addEmpForm] = Form.useForm(); // 新建员工表单
 
   const fetchRecords = async () => {
     setLoading(true);
@@ -53,13 +60,13 @@ function Records({ user }) {
   };
 
   const fetchStores = async () => {
-    if (user.role === 'admin') {
-      try {
-        const res = await api.get('/api/stores');
-        setStores(res.data.stores);
-      } catch (err) {
-        console.error('获取门店列表失败');
-      }
+    try {
+      const res = await api.get('/api/stores');
+      const storeData = res.data.stores || [];
+      setStores(storeData.map(s => s.name));
+      setStoreNumbers(storeData.reduce((acc, s) => { acc[s.name] = s.number; return acc; }, {}));
+    } catch (err) {
+      console.error('获取门店列表失败');
     }
   };
 
@@ -142,7 +149,41 @@ function Records({ user }) {
   const openSubmitModal = () => {
     form.resetFields();
     setItems([]);
+    setSelectedEmpInfo(null);
+    setEmpSearch('');
     setSubmitModalVisible(true);
+  };
+
+  const openAddEmpModal = () => {
+    addEmpForm.resetFields();
+    setAddEmpModalVisible(true);
+  };
+
+  const handleAddEmployee = async () => {
+    try {
+      const values = await addEmpForm.validateFields();
+      const empStoreName = user.store_name;
+      if (!empStoreName) {
+        message.error('当前账户未绑定门店');
+        return;
+      }
+      const res = await api.post('/api/store/employees', {
+        name: values.name,
+        id_number: values.id_number,
+        hire_date: values.hire_date ? values.hire_date.format('YYYY-MM-DD') : null,
+        promotion_date: values.promotion_date ? values.promotion_date.format('YYYY-MM-DD') : null,
+      });
+      message.success('员工创建成功');
+      setAddEmpModalVisible(false);
+      // 刷新员工列表并自动选中新员工
+      await fetchEmployees();
+      const newEmp = { id: res.id, name: values.name, store_name: empStoreName, id_number: values.id_number, hire_date: values.hire_date ? values.hire_date.format('YYYY-MM-DD') : null, promotion_date: values.promotion_date ? values.promotion_date.format('YYYY-MM-DD') : null };
+      setSelectedEmpInfo(newEmp);
+      setEmpSearch(`${values.name}（${empStoreName}）`);
+      form.setFieldsValue({ employee_id: res.id });
+    } catch (err) {
+      message.error(err.response?.data?.error || '创建失败');
+    }
   };
 
   const statusTag = (status) => {
@@ -158,7 +199,7 @@ function Records({ user }) {
   const columns = [
     { title: '员工', dataIndex: 'employee_name', key: 'employee_name', width: 100 },
     { title: '门店', dataIndex: 'store_name', key: 'store_name', width: 120 },
-    { title: '月份', dataIndex: 'month', key: 'month', width: 100 },
+    { title: '月份', dataIndex: 'month', key: 'month', width: 100, render: (v) => v ? dayjs(v).format('YYYY年M月') : '-' },
     {
       title: '荣',
       key: 'honor_count',
@@ -232,6 +273,7 @@ function Records({ user }) {
             <DatePicker
               picker="month"
               placeholder="选择月份"
+              format="YYYY年M月"
               value={filterMonth ? dayjs(filterMonth) : null}
               onChange={(date) => setFilterMonth(date ? date.format('YYYY-MM') : null)}
             />
@@ -244,7 +286,10 @@ function Records({ user }) {
                 style={{ width: 150 }}
                 value={filterStore}
                 onChange={setFilterStore}
-                options={stores.map(s => ({ value: s, label: s }))}
+                options={stores.map(s => ({
+                  value: s,
+                  label: storeNumbers[s] ? `${storeNumbers[s]} ${s}` : s
+                }))}
               />
             </Col>
           )}
@@ -267,7 +312,7 @@ function Records({ user }) {
 
       {/* 详情弹窗 */}
       <Modal
-        title={currentRecord && !reviewModalVisible ? `${currentRecord.employee_name} - ${currentRecord.month} 记录详情` : ''}
+        title={currentRecord && !reviewModalVisible ? `${currentRecord.employee_name} - ${dayjs(currentRecord.month).format('YYYY年M月')} 记录详情` : ''}
         open={!!currentRecord && !reviewModalVisible}
         onCancel={() => setCurrentRecord(null)}
         footer={<Button onClick={() => setCurrentRecord(null)}>关闭</Button>}
@@ -311,26 +356,68 @@ function Records({ user }) {
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item name="employee_id" label="选择员工" rules={[{ required: true, message: '请选择员工' }]}>
-                <Select
-                  placeholder="选择员工"
-                  showSearch
-                  optionFilterProp="children"
-                >
-                  {employees.map(emp => (
-                    <Select.Option key={emp.id} value={emp.id}>
-                      {emp.name}{emp.id_number ? ` (${emp.id_number})` : ''} - {emp.store_name}
-                    </Select.Option>
-                  ))}
-                </Select>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <AutoComplete
+                    placeholder="输入员工姓名搜索"
+                    value={empSearch}
+                    style={{ flex: 1 }}
+                    onChange={(val) => {
+                      setEmpSearch(val);
+                      if (!val) setSelectedEmpInfo(null);
+                    }}
+                    onSelect={(val) => {
+                      const empId = Number(val.split('|')[0]);
+                      const emp = employees.find(e => Number(e.id) === empId);
+                      setSelectedEmpInfo(emp || null);
+                      setEmpSearch(emp ? `${emp.name}（${emp.store_name}）` : val);
+                      form.setFieldsValue({ employee_id: empId });
+                    }}
+                    options={employees
+                      .filter(e => !e.name.startsWith('[门店]'))
+                      .map(emp => ({
+                        label: `${emp.name}（${emp.store_name}）`,
+                        value: `${emp.id}|${emp.name}`,
+                      }))
+                    }
+                  />
+                  <Button icon={<UserAddOutlined />} onClick={openAddEmpModal} title="新建员工">
+                    新建
+                  </Button>
+                </div>
               </Form.Item>
             </Col>
             <Col span={12}>
               <Form.Item name="month" label="月份" rules={[{ required: true, message: '请选择月份' }]}>
-                <DatePicker picker="month" style={{ width: '100%' }} />
+                <DatePicker picker="month" style={{ width: '100%' }} format="YYYY年M月" />
               </Form.Item>
             </Col>
           </Row>
         </Form>
+
+        {/* 员工信息显示 */}
+        {selectedEmpInfo && (
+          <div style={{
+            background: '#f5f5f5', borderRadius: 8, padding: '12px 16px',
+            marginBottom: 16, display: 'flex', gap: 24, flexWrap: 'wrap'
+          }}>
+            <div>
+              <Text type="secondary" style={{ fontSize: 12 }}>身份证号码</Text>
+              <div style={{ fontWeight: 600 }}>{selectedEmpInfo.id_number || '未设置'}</div>
+            </div>
+            <div>
+              <Text type="secondary" style={{ fontSize: 12 }}>提干时间</Text>
+              <div style={{ fontWeight: 600 }}>{selectedEmpInfo.promotion_date ? dayjs(selectedEmpInfo.promotion_date).format('YYYY-MM-DD') : '未设置'}</div>
+            </div>
+            <div>
+              <Text type="secondary" style={{ fontSize: 12 }}>入职时间</Text>
+              <div style={{ fontWeight: 600 }}>{selectedEmpInfo.hire_date ? dayjs(selectedEmpInfo.hire_date).format('YYYY-MM-DD') : '未设置'}</div>
+            </div>
+            <div>
+              <Text type="secondary" style={{ fontSize: 12 }}>所属门店</Text>
+              <div style={{ fontWeight: 600 }}>{selectedEmpInfo.store_name || '未设置'}</div>
+            </div>
+          </div>
+        )}
 
         <div style={{ marginBottom: 16 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12 }}>
@@ -391,7 +478,7 @@ function Records({ user }) {
 
       {/* 审核弹窗 */}
       <Modal
-        title={`审核 - ${currentRecord?.employee_name} ${currentRecord?.month}`}
+        title={`审核 - ${currentRecord?.employee_name} ${currentRecord?.month ? dayjs(currentRecord.month).format('YYYY年M月') : ''}`}
         open={reviewModalVisible}
         onCancel={() => setReviewModalVisible(false)}
         footer={null}
@@ -427,6 +514,37 @@ function Records({ user }) {
             </Form>
           </div>
         )}
+      </Modal>
+
+      {/* 新建员工弹窗 */}
+      <Modal
+        title="新建员工"
+        open={addEmpModalVisible}
+        onOk={handleAddEmployee}
+        onCancel={() => setAddEmpModalVisible(false)}
+        width={500}
+      >
+        <Form form={addEmpForm} layout="vertical">
+          <Form.Item name="name" label="姓名" rules={[{ required: true, message: '请输入姓名' }]}>
+            <Input placeholder="请输入员工姓名" />
+          </Form.Item>
+          <Form.Item name="id_number" label="身份证号码" rules={[{ required: true, message: '请输入身份证号码' }]}>
+            <Input placeholder="请输入身份证号码" />
+          </Form.Item>
+          <div style={{ color: '#888', fontSize: 12, marginBottom: 16 }}>所属门店：{user.store_name || '未绑定'}（自动关联）</div>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item name="hire_date" label="入职时间">
+                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" placeholder="选择入职时间" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item name="promotion_date" label="提干时间">
+                <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" placeholder="选择提干时间" />
+              </Form.Item>
+            </Col>
+          </Row>
+        </Form>
       </Modal>
 
       {/* 批量导入弹窗 */}
