@@ -1160,7 +1160,7 @@ app.get('/api/records', authenticate, (req, res) => {
     SELECT r.*, e.name as employee_name, e.id_number,
            u.username as submitted_by_name
     FROM records r
-    JOIN employees e ON r.employee_id = e.id
+    LEFT JOIN employees e ON r.employee_id = e.id
     JOIN users u ON r.submitted_by = u.id
   `;
   const conditions = [];
@@ -1201,6 +1201,11 @@ app.get('/api/records', authenticate, (req, res) => {
 
   records.forEach(record => {
     record.items = dbAll('SELECT * FROM record_items WHERE record_id = ?', [record.id]);
+    // 处理员工被删除的情况
+    if (!record.employee_name) {
+      record.employee_name = '[已删除员工]';
+      record.id_number = null;
+    }
   });
 
   res.json({ records });
@@ -1404,7 +1409,7 @@ app.put('/api/users/:id/reset-password', authenticate, requireAdmin, (req, res) 
 // 修改自己的密码
 app.put('/api/users/change-password', authenticate, (req, res) => {
   const { oldPassword, newPassword } = req.body;
-  const userId = req.user.id;
+  const userId = Number(req.user.id);  // 确保是数字类型
   
   if (!oldPassword || !newPassword) {
     return res.status(400).json({ error: '请填写完整' });
@@ -1414,7 +1419,12 @@ app.put('/api/users/change-password', authenticate, (req, res) => {
     return res.status(400).json({ error: '新密码至少6位' });
   }
   
-  const user = dbGet('SELECT * FROM users WHERE id = ?', [userId]);
+  // 先尝试用 ID 查找，如果找不到再用 username 查找
+  let user = dbGet('SELECT * FROM users WHERE id = ?', [userId]);
+  if (!user) {
+    // 备用方案：用 username 查找
+    user = dbGet('SELECT * FROM users WHERE username = ?', [req.user.username]);
+  }
   if (!user) {
     return res.status(404).json({ error: '用户不存在' });
   }
@@ -1425,7 +1435,7 @@ app.put('/api/users/change-password', authenticate, (req, res) => {
   }
   
   const hashedPassword = bcrypt.hashSync(newPassword, 10);
-  dbRun('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, userId]);
+  dbRun('UPDATE users SET password = ? WHERE id = ?', [hashedPassword, user.id]);
   saveDb();
   console.log('[修改密码]', req.user.username, '修改了密码');
   res.json({ message: '密码修改成功' });
@@ -2510,9 +2520,9 @@ app.post('/api/records/:id/approve', authenticate, requireAdmin, async (req, res
     
     // 获取记录详情用于发送邮件
     const record = dbGet(`
-      SELECT r.*, e.name as employee_name, e.store_name
+      SELECT r.*, e.name as employee_name, r.store_name
       FROM records r
-      JOIN employees e ON r.employee_id = e.id
+      LEFT JOIN employees e ON r.employee_id = e.id
       WHERE r.id = ?
     `, [recordId]);
     
@@ -2576,9 +2586,9 @@ app.post('/api/records/batch-approve', authenticate, requireAdmin, async (req, r
       
       // 获取记录详情
       const record = dbGet(`
-        SELECT r.*, e.name as employee_name, e.store_name
+        SELECT r.*, e.name as employee_name, r.store_name
         FROM records r
-        JOIN employees e ON r.employee_id = e.id
+        LEFT JOIN employees e ON r.employee_id = e.id
         WHERE r.id = ?
       `, [recordId]);
       
