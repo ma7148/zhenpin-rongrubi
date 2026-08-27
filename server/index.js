@@ -13,7 +13,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import fs from 'fs';
 import crypto from 'crypto';
-import { loadEmailConfig, sendConfirmationEmail } from './email-service.js';
+import { getEmailConfig } from './email-service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
