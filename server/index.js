@@ -521,9 +521,23 @@ const EMAIL_CONFIG_PATH = join(__dirname, 'email-config.json');
 let emailConfig = null;
 
 function loadEmailConfig() {
+  // 优先从环境变量读取（Railway 部署）
+  if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+    emailConfig = {
+      email: process.env.EMAIL_USER,
+      password: process.env.EMAIL_PASS,
+      smtpHost: process.env.EMAIL_SMTP_HOST || 'smtp.139.com',
+      smtpPort: parseInt(process.env.EMAIL_SMTP_PORT) || 465,
+      enabled: true
+    };
+    console.log('[邮箱] 从环境变量加载配置:', emailConfig.email);
+    return;
+  }
+  
+  // 从配置文件读取（本地开发）
   if (fs.existsSync(EMAIL_CONFIG_PATH)) {
     emailConfig = JSON.parse(fs.readFileSync(EMAIL_CONFIG_PATH, 'utf-8'));
-    console.log('[邮箱] 配置已加载:', emailConfig.email);
+    console.log('[邮箱] 从配置文件加载:', emailConfig.email);
   }
 }
 
