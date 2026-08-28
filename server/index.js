@@ -1444,9 +1444,6 @@ app.put('/api/users/:id/reset-password', authenticate, requireAdmin, (req, res) 
 // 修改自己的密码
 app.put('/api/users/change-password', authenticate, (req, res) => {
   const { oldPassword, newPassword } = req.body;
-  const userId = Number(req.user.id);  // 确保是数字类型
-  
-  process.stderr.write('[修改密码] req.user: ' + JSON.stringify(req.user) + ' userId: ' + userId + '\n');
   
   if (!oldPassword || !newPassword) {
     return res.status(400).json({ error: '请填写完整' });
@@ -1456,16 +1453,10 @@ app.put('/api/users/change-password', authenticate, (req, res) => {
     return res.status(400).json({ error: '新密码至少6位' });
   }
   
-  // 先尝试用 ID 查找，如果找不到再用 username 查找
-  let user = dbGet('SELECT * FROM users WHERE id = ?', [userId]);
-  process.stderr.write('[修改密码] ID查找结果: ' + (user ? '找到' : '未找到') + '\n');
+  // 直接用 username 查找用户
+  const user = dbGet('SELECT * FROM users WHERE username = ?', [req.user.username]);
   if (!user) {
-    // 备用方案：用 username 查找
-    user = dbGet('SELECT * FROM users WHERE username = ?', [req.user.username]);
-    process.stderr.write('[修改密码] Username查找结果：' + (user ? '找到' : '未找到') + '\n');
-  }
-  if (!user) {
-    return res.status(404).json({ error: '用户不存在', debug: { userId, userType: typeof req.user.id, user: req.user } });
+    return res.status(404).json({ error: '用户不存在' });
   }
   
   // 验证旧密码
