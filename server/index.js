@@ -1462,10 +1462,10 @@ app.put('/api/users/change-password', authenticate, (req, res) => {
   if (!user) {
     // 备用方案：用 username 查找
     user = dbGet('SELECT * FROM users WHERE username = ?', [req.user.username]);
-    process.stderr.write('[修改密码] Username查找结果: ' + (user ? '找到' : '未找到') + '\n');
+    process.stderr.write('[修改密码] Username查找结果：' + (user ? '找到' : '未找到') + '\n');
   }
   if (!user) {
-    return res.status(404).json({ error: '用户不存在' });
+    return res.status(404).json({ error: '用户不存在', debug: { userId, userType: typeof req.user.id, user: req.user } });
   }
   
   // 验证旧密码
