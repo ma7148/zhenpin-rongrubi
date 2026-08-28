@@ -853,6 +853,23 @@ app.get('/api/public/stores', (req, res) => {
   res.json({ stores: [...allStores] });
 });
 
+// 清理占位员工（仅admin可用）
+app.post('/api/admin/cleanup-placeholders', authenticate, noViewer, (req, res) => {
+  if (req.user.role !== 'admin') {
+    return res.status(403).json({ error: '只有管理员可以操作' });
+  }
+  
+  const placeholders = dbAll("SELECT id, name, store_name FROM employees WHERE name LIKE '[待补全]%'");
+  
+  placeholders.forEach(emp => {
+    dbRun("UPDATE employees SET name = ? WHERE id = ?", [`未知员工(${emp.store_name})`, emp.id]);
+  });
+  
+  saveDb();
+  console.log(`[清理] 已清理 ${placeholders.length} 个占位员工`);
+  res.json({ message: `已清理 ${placeholders.length} 个占位员工`, count: placeholders.length });
+});
+
 // 创建新门店（仅admin可用）
 app.post('/api/admin/stores', authenticate, noViewer, (req, res) => {
   if (req.user.role !== 'admin') {
