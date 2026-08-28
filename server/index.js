@@ -1446,6 +1446,19 @@ app.get('/api/test/version', (req, res) => {
   res.json({ version: '2026-08-28-v4-username-fix', timestamp: new Date().toISOString() });
 });
 
+// 诊断端点 - 检查数据库用户
+app.get('/api/test/check-user', authenticate, (req, res) => {
+  const username = req.user.username;
+  const user = dbGet('SELECT * FROM users WHERE username = ?', [username]);
+  const allUsers = dbAll('SELECT id, username, role FROM users');
+  res.json({ 
+    requestedUsername: username, 
+    found: !!user, 
+    user: user ? { id: user.id, username: user.username } : null,
+    allUsers 
+  });
+});
+
 // 修改自己的密码
 app.put('/api/users/change-password', authenticate, (req, res) => {
   const { oldPassword, newPassword } = req.body;
