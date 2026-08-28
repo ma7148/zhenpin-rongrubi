@@ -643,6 +643,8 @@ async function sendImportEmail(records, stats, originalFilename) {
 // 加载邮箱配置
 loadEmailConfig();
 
+console.log('=== 代码版本: 2026-08-28-v3 修改密码调试 ===');
+
 // 认证中间件
 const authenticate = (req, res, next) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
