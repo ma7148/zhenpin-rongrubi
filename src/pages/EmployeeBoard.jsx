@@ -43,9 +43,10 @@ function EmployeeBoard({ user }) {
     api.get('/api/records?status=approved').then(res => setAllRecords(res.data.records || [])).catch(() => {});
   }, []);
 
-  // 筛选员工（排除虚拟门店记录）
+  // 筛选员工（排除虚拟门店记录和未知员工）
   const filteredEmployees = employees.filter(emp => {
     if (emp.name.startsWith('[门店]')) return false; // 隐藏虚拟门店记录
+    if (emp.name.startsWith('未知员工')) return false; // 隐藏未知员工
     if (filterStore && emp.store_name !== filterStore) return false;
     if (filterName && !emp.name.includes(filterName)) return false;
     return true;
