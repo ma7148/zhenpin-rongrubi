@@ -643,8 +643,6 @@ async function sendImportEmail(records, stats, originalFilename) {
 // 加载邮箱配置
 loadEmailConfig();
 
-console.log('=== 代码版本: 2026-08-28-v3 修改密码调试 ===');
-
 // 认证中间件
 const authenticate = (req, res, next) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
@@ -1439,24 +1437,6 @@ app.put('/api/users/:id/reset-password', authenticate, requireAdmin, (req, res) 
   saveDb();
   console.log('[管理员] 重置密码:', req.user.username, '→', user.username);
   res.json({ message: `已重置 ${user.username} 的密码` });
-});
-
-// 测试端点 - 验证代码版本
-app.get('/api/test/version', (req, res) => {
-  res.json({ version: '2026-08-28-v4-username-fix', timestamp: new Date().toISOString() });
-});
-
-// 诊断端点 - 检查数据库用户
-app.get('/api/test/check-user', authenticate, (req, res) => {
-  const username = req.user.username;
-  const user = dbGet('SELECT * FROM users WHERE username = ?', [username]);
-  const allUsers = dbAll('SELECT id, username, role FROM users');
-  res.json({ 
-    requestedUsername: username, 
-    found: !!user, 
-    user: user ? { id: user.id, username: user.username } : null,
-    allUsers 
-  });
 });
 
 // 修改自己的密码
