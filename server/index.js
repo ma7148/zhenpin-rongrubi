@@ -1441,6 +1441,11 @@ app.put('/api/users/:id/reset-password', authenticate, requireAdmin, (req, res) 
   res.json({ message: `已重置 ${user.username} 的密码` });
 });
 
+// 测试端点 - 验证代码版本
+app.get('/api/test/version', (req, res) => {
+  res.json({ version: '2026-08-28-v4-username-fix', timestamp: new Date().toISOString() });
+});
+
 // 修改自己的密码
 app.put('/api/users/change-password', authenticate, (req, res) => {
   const { oldPassword, newPassword } = req.body;
