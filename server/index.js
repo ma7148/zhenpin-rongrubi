@@ -1446,7 +1446,7 @@ app.put('/api/users/change-password', authenticate, (req, res) => {
   const { oldPassword, newPassword } = req.body;
   const userId = Number(req.user.id);  // 确保是数字类型
   
-  console.log('[修改密码] req.user:', JSON.stringify(req.user), 'userId:', userId);
+  process.stderr.write('[修改密码] req.user: ' + JSON.stringify(req.user) + ' userId: ' + userId + '\n');
   
   if (!oldPassword || !newPassword) {
     return res.status(400).json({ error: '请填写完整' });
@@ -1458,11 +1458,11 @@ app.put('/api/users/change-password', authenticate, (req, res) => {
   
   // 先尝试用 ID 查找，如果找不到再用 username 查找
   let user = dbGet('SELECT * FROM users WHERE id = ?', [userId]);
-  console.log('[修改密码] ID查找结果:', user ? '找到' : '未找到');
+  process.stderr.write('[修改密码] ID查找结果: ' + (user ? '找到' : '未找到') + '\n');
   if (!user) {
     // 备用方案：用 username 查找
     user = dbGet('SELECT * FROM users WHERE username = ?', [req.user.username]);
-    console.log('[修改密码] Username查找结果:', user ? '找到' : '未找到');
+    process.stderr.write('[修改密码] Username查找结果: ' + (user ? '找到' : '未找到') + '\n');
   }
   if (!user) {
     return res.status(404).json({ error: '用户不存在' });
