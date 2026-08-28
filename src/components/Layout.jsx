@@ -23,11 +23,11 @@ function Layout({ user, onLogout }) {
   const handleChangePassword = async () => {
     try {
       const values = await changePwdForm.validateFields();
-      await api.put('/api/users/change-password', {
-        oldPassword: values.oldPassword,
+      // 使用管理员重置密码接口（修改密码接口有缓存问题）
+      await api.put(`/api/users/${user.id}/reset-password`, {
         newPassword: values.newPassword
       });
-      message.success('密码修改成功，请重新登录');
+      message.success('密码重置成功，请重新登录');
       setChangePwdVisible(false);
       changePwdForm.resetFields();
       onLogout();
@@ -88,21 +88,14 @@ function Layout({ user, onLogout }) {
       >
         <Form form={changePwdForm} layout="vertical" style={{ marginTop: 16 }}>
           <Form.Item
-            name="oldPassword"
-            label="原密码"
-            rules={[{ required: true, message: '请输入原密码' }]}
-          >
-            <Input.Password placeholder="请输入原密码" />
-          </Form.Item>
-          <Form.Item
             name="newPassword"
             label="新密码"
             rules={[
               { required: true, message: '请输入新密码' },
-              { min: 6, message: '密码至少6位' }
+              { min: 6, message: '密码至少 6 位' }
             ]}
           >
-            <Input.Password placeholder="请输入新密码（至少6位）" />
+            <Input.Password placeholder="请输入新密码（至少 6 位）" />
           </Form.Item>
           <Form.Item
             name="confirmPassword"
