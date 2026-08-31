@@ -2697,8 +2697,8 @@ app.get('*', (req, res) => {
 // 启动服务器
 initDatabase().then(() => {
   const PORT = process.env.PORT || 3000;
-  app.listen(PORT, () => {
-    console.log(`服务器运行在 http://localhost:${PORT}`);
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`服务器运行在 http://0.0.0.0:${PORT}`);
   });
   
   // 启动自动备份(每6小时一次)
