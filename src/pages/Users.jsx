@@ -34,7 +34,8 @@ function Users() {
   const fetchStores = async () => {
     try {
       const res = await api.get('/api/stores');
-      setStores(res.data.stores);
+      // 后端返回的是 {name, number} 对象数组，提取 name
+      setStores(res.data.stores.map(s => s.name));
     } catch (err) { /* ignore */ }
   };
 

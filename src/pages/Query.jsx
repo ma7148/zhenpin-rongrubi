@@ -18,7 +18,8 @@ function Query() {
   // 加载门店列表
   useEffect(() => {
     api.get('/api/stores').then(res => {
-      setStores(res.data.stores || []);
+      // 后端返回的是 {name, number} 对象数组，提取 name
+      setStores((res.data.stores || []).map(s => s.name));
     }).catch(() => {});
   }, []);
 
