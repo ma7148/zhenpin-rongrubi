@@ -373,7 +373,7 @@ function Records({ user }) {
                       form.setFieldsValue({ employee_id: empId });
                     }}
                     options={employees
-                      .filter(e => !e.name.startsWith('[门店]'))
+                      .filter(e => !e.name.startsWith('[门店]') && !e.name.startsWith('未知员工'))
                       .map(emp => ({
                         label: `${emp.name}（${emp.store_name}）`,
                         value: `${emp.id}|${emp.name}`,
