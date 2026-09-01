@@ -870,6 +870,36 @@ app.post('/api/admin/cleanup-placeholders', authenticate, noViewer, (req, res) =
   res.json({ message: `已清理 ${placeholders.length} 个占位员工`, count: placeholders.length });
 });
 
+// 删除所有未知员工（仅admin可用）
+app.post('/api/admin/delete-unknown-employees', authenticate, requireAdmin, (req, res) => {
+  const unknownEmployees = dbAll("SELECT id, name, store_name FROM employees WHERE name LIKE '未知员工%'");
+  
+  if (unknownEmployees.length === 0) {
+    return res.json({ message: '没有未知员工需要删除', count: 0 });
+  }
+  
+  // 删除未知员工及其相关记录
+  unknownEmployees.forEach(emp => {
+    // 先删除该员工的荣辱记录明细
+    const records = dbAll('SELECT id FROM records WHERE employee_id = ?', [emp.id]);
+    records.forEach(rec => {
+      dbRun('DELETE FROM record_items WHERE record_id = ?', [rec.id]);
+    });
+    // 删除该员工的荣辱记录
+    dbRun('DELETE FROM records WHERE employee_id = ?', [emp.id]);
+    // 删除该员工的文件记录
+    dbRun('DELETE FROM files WHERE employee_id = ?', [emp.id]);
+    // 删除该员工
+    dbRun('DELETE FROM employees WHERE id = ?', [emp.id]);
+    
+    logOperation(req, 'DELETE', 'unknown_employee', emp.id, { name: emp.name, store_name: emp.store_name });
+  });
+  
+  saveDb();
+  console.log(`[删除] 已删除 ${unknownEmployees.length} 个未知员工`);
+  res.json({ message: `已删除 ${unknownEmployees.length} 个未知员工`, count: unknownEmployees.length });
+});
+
 // 创建新门店（仅admin可用）
 app.post('/api/admin/stores', authenticate, noViewer, (req, res) => {
   if (req.user.role !== 'admin') {
